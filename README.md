@@ -1,132 +1,213 @@
-# Hans Claude Hook
+# Claude Code Audio Notification Hooks
 
-## ⚠️ SECURITY WARNING ⚠️
+Intelligent audio notifications for Claude Code that announce permission requests and task completions using OpenAI and ElevenLabs TTS.
 
-**🚨 DANGER: Claude hooks can be dangerous and may compromise your system! 🚨**
+## ⚠️ Security Notice
 
-**⚠️ IMPORTANT: This repository contains executable scripts that will run code on your machine. ⚠️**
+This repository contains executable scripts that will run as Claude hooks. Please review all scripts before use. Running untrusted code can be dangerous and may compromise your system. USE AT YOUR OWN RISK.
 
-**🔒 SECURITY NOTICE:**
+## Features
 
-- **NEVER run Claude hooks without reviewing the code first**
-- **These scripts have access to your system and can execute arbitrary commands**
-- **Running untrusted code can lead to data loss, security breaches, or system compromise**
-- **USE AT YOUR OWN RISK**
+- 🔊 **Permission Alerts**: Audibly announces when Claude needs permission to run a command
+- ✅ **Completion Notifications**: Announces when Claude completes a task  
+- 🧠 **Smart Filtering**: Only speaks for commands that actually need permission
+- 🎯 **Dynamic Configuration**: Reads your Claude settings to determine what's allowed
+- 🌍 **Fully Portable**: Works on any machine with proper setup
 
-**📋 REQUIREMENT: You MUST inspect all hook scripts (including `.claude/hans/play.sh`) before use.**
+## How It Works
 
----
+1. **PreToolUse Hook**: Fires before Claude uses any tool
+   - Checks if the tool/command is in your allowed list
+   - If NOT allowed, speaks "Do I have permission to [action]?"
+   - Silent for all allowed commands
 
-## Overview
+2. **Stop Hook**: Fires when Claude finishes responding
+   - Summarizes what was completed
+   - Speaks "[task] completed"
 
-This repository contains a Claude hook script that provides text-to-speech notifications when Claude completes tasks. The script is designed to enhance the user experience by providing audio feedback when work is finished.
+## Prerequisites
 
-## What the Script Does
+- Claude Code installed
+- OpenAI API key (for text summarization)
+- ElevenLabs API key (for text-to-speech)
+- Audio player (afplay on macOS, ffplay, mpg123, or mpv on Linux)
 
-### Core Functionality
+## Installation
 
-The `play.sh` script is a Claude hook that:
+### 1. Clone the Repository
 
-1. **Extracts User Prompts**: Reads the conversation transcript to identify the last user request
-2. **Processes Content**: Uses OpenAI's GPT-4 to convert complex prompts into simple, readable summaries
-3. **Text-to-Speech**: Plays audio notifications via ElevenLabs TTS when tasks are completed
-4. **Fallback Support**: Includes multiple audio playback methods for different systems
+```bash
+git clone https://github.com/wgs4/hans-claude-hook.git ~/hans-claude-hook
+```
 
-### Detailed Process Flow
+### 2. Set Up API Keys
 
-1. **Hook Data Processing**
+Create a `.claude/hans/.labs` file with your API keys:
 
-   - Reads Claude hook data from stdin
-   - Extracts transcript path and user prompt information
-   - Falls back to direct prompt extraction if transcript parsing fails
+```bash
+cat > ~/hans-claude-hook/.claude/hans/.labs << 'EOF'
+# API Keys for audio notifications
+export OPENAI_API_KEY="your-openai-api-key-here"
+export ELEVENLABS_API_KEY="your-elevenlabs-api-key-here"
+export ELEVENLABS_VOICE_ID="your-elevenlabs-voice-id-here"
+EOF
+```
 
-2. **Prompt Simplification**
+### 3. Configure Claude Settings
 
-   - Sends the user's prompt to OpenAI GPT-4
-   - Converts complex requests into simple 3-5 word summaries
-   - Uses low temperature (0.3) for consistent, focused outputs
+You need to add the hooks to your Claude settings. The location depends on your setup:
 
-3. **Audio Generation & Playback**
-   - Generates TTS audio via ElevenLabs API
-   - Creates temporary MP3 files for playback
-   - Attempts multiple audio players in order of preference:
-     - `afplay` (macOS)
-     - `ffplay` (FFmpeg)
-     - `mpg123`
-     - `mpv`
-   - Falls back to system TTS (`say` command) if no players are available
+#### Option A: Project-Specific Settings (Recommended)
+Add to `.claude/settings.local.json` in your project directory:
 
-### Configuration Requirements
+```bash
+# Navigate to your project
+cd /path/to/your/project
 
-The script requires several environment variables to function properly:
+# Create .claude directory if it doesn't exist
+mkdir -p .claude
 
-- **OpenAI**: `OPENAI_API_KEY` and optionally `OPENAI_MODEL` (defaults to `gpt-4o-mini`)
-- **ElevenLabs**: `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID`
+# Copy and customize the example settings
+cp ~/hans-claude-hook/example-settings.json .claude/settings.local.json
+```
 
-These can be set in a `.labs` file in the script directory, current directory, or home directory.
+#### Option B: Global Settings
+Add to `~/.claude/settings.local.json` for all projects:
 
-### Dependencies
+```bash
+# Copy and customize the example settings
+cp ~/hans-claude-hook/example-settings.json ~/.claude/settings.local.json
+```
 
-Required system commands:
+#### Option C: Use the Setup Script (Easiest)
+Run the provided setup script to automatically configure your hooks:
 
-- `curl` - For API requests
-- `jq` - For JSON processing
-- At least one audio player (see playback methods above)
+```bash
+cd ~/hans-claude-hook
+./setup.sh
+```
 
-## Installation & Setup
+### 4. Customize Allowed Commands
 
-1. **Clone this repository**
-2. **Review the script code thoroughly** (especially `.claude/hans/play.sh`)
-3. **Create a `.labs` file at `.claude/hans/.labs`** with your API credentials:
-   ```bash
-   export OPENAI_API_KEY="your-openai-key-here"
-   export ELEVENLABS_API_KEY="your-elevenlabs-key-here"
-   export ELEVENLABS_VOICE_ID="your-voice-id-here"
-   ```
-4. **Ensure required dependencies are installed**:
+Edit your `settings.local.json` to add commands that should run WITHOUT audio notifications:
 
-   ```bash
-   # macOS
-   brew install jq ffmpeg
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(npm:*)",
+      "Read",
+      "Write",
+      "Edit"
+    ]
+  }
+}
+```
 
-   # Ubuntu/Debian
-   sudo apt install jq ffmpeg
-   ```
+### 5. Make Scripts Executable
 
-## Usage
+```bash
+chmod +x ~/hans-claude-hook/.claude/hans/*.sh
+```
 
-The script is designed to run automatically as a Claude hook. When Claude completes a task, it will:
+## Configuration Details
 
-1. Extract your original request
-2. Convert it to a simple summary
-3. Play an audio notification: "An agent finished their work on [summary]"
+### Settings File Structure
 
-## Security Considerations
+The hooks read from your Claude settings file to determine what's allowed:
 
-- **Script Review**: Always examine hook scripts before execution
-- **API Keys**: Keep your API keys secure and never commit them to version control
-- **Network Access**: The script makes external API calls to OpenAI and ElevenLabs
-- **File System**: Creates temporary MP3 files during execution
-- **Audio Playback**: May trigger system audio events
+- **Default Location**: `/Users/david/code/.claude/settings.local.json`
+  - Update the `SETTINGS_FILE` path in `play_permission.sh` line 65 for your setup
+- **Permissions**: List of allowed commands/tools that won't trigger audio
+- **Hooks**: Configuration for when hooks should fire
+
+### Understanding Settings Priority
+
+Claude checks settings in this order:
+1. Project-specific: `.claude/settings.local.json` in your current project
+2. Global: `~/.claude/settings.local.json`
+
+The project settings take precedence and are where both hooks and permissions should be configured.
+
+### Customizing the Audio Messages
+
+Edit the scripts to change what's spoken:
+
+- **Permission requests** (`play_permission.sh`): Line 131
+  ```bash
+  JSON_BODY=$(jq -n --arg text "Do I have permission to $SIMPLE_MESSAGE?" ...
+  ```
+
+- **Completion messages** (`play.sh`): Line 122
+  ```bash
+  JSON_BODY=$(jq -n --arg text "$SIMPLE_MESSAGE completed" ...
+  ```
 
 ## Troubleshooting
 
-### Common Issues
+### No Audio Playing
 
-- **"No suitable audio player found"**: Install FFmpeg, mpg123, or mpv
-- **"ElevenLabs API request failed"**: Check API key and voice ID
-- **"OpenAI request failed"**: Verify API key and network connectivity
+1. Check API keys are set correctly in `.labs` file
+2. Verify audio player is installed (`afplay`, `ffplay`, `mpg123`, or `mpv`)
+3. Check `/tmp/pretooluse_hook.log` for errors
+4. Check `/tmp/permission_hook_errors.log` for script errors
 
-### Debug Mode
+### Wrong Commands Triggering Audio
 
-The script provides verbose output to help diagnose issues. Check the console output for detailed error messages.
+1. Add the command to your `allow` list in settings
+2. Use wildcards: `"Bash(command:*)"` allows all variations
+3. Remember non-Bash tools need just the tool name: `"Read"`, `"Write"`
+
+### Hooks Not Firing
+
+1. Restart Claude Code after changing settings
+2. Verify hooks are in the correct settings file (project takes precedence)
+3. Check that scripts are executable
+4. Run `claude code` with `--debug hooks` to see hook execution
+
+### Testing Your Setup
+
+Test if audio works:
+```bash
+# Test completion notification
+echo "test" | ~/hans-claude-hook/.claude/hans/play.sh
+
+# Test permission notification
+echo '{"tool_name":"Bash","tool_input":{"command":"curl test"}}' | ~/hans-claude-hook/.claude/hans/play_permission.sh
+```
+
+## How the Permission Checking Works
+
+The `play_permission.sh` script:
+1. Reads your Claude settings file dynamically
+2. Extracts the list of allowed commands/tools
+3. For Bash commands: checks against patterns like `"Bash(git status:*)"`
+4. For other tools: checks against tool names like `"Read"`, `"Write"`
+5. Only speaks if the command/tool is NOT in the allow list
+
+This makes the system completely dynamic - it adapts to whatever permissions you have set!
+
+## Files in This Repository
+
+- `.claude/hans/play.sh` - Completion notification script
+- `.claude/hans/play_permission.sh` - Permission request notification script
+- `.claude/hans/notification_test.sh` - Debug script for testing notifications
+- `example-settings.json` - Example Claude settings configuration
+- `setup.sh` - Automated setup script
+
+## Contributing
+
+Feel free to submit issues and pull requests to improve the notification system.
 
 ## License
 
-See [LICENSE](LICENSE) file for details.
+MIT
 
-## Disclaimer
+## Credits
 
-**THE AUTHOR IS NOT LIABLE FOR ANY DAMAGE, DATA LOSS, OR SECURITY ISSUES RESULTING FROM THE USE OF THIS SCRIPT.**
-
-This software is provided "as is" without warranty of any kind. Use at your own risk and always review code before execution.
+Created with Claude Code 🤖

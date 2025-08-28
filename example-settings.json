@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/hans-claude-hook/.claude/hans/play.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/hans-claude-hook/.claude/hans/play_permission.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "// Add your allowed commands here",
+      "// Examples:",
+      "// \"Bash(git status:*)\" - Allow all git status commands",
+      "// \"Bash(ls:*)\" - Allow all ls commands", 
+      "// \"Bash(npm:*)\" - Allow all npm commands",
+      "// \"Read\" - Allow all Read tool usage",
+      "// \"Write\" - Allow all Write tool usage"
+    ]
+  }
+}
