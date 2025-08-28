@@ -112,8 +112,9 @@ if [[ -n "$TOOL_NAME" ]]; then
       PROMPT="run command: $COMMAND"
     fi
   else
-    # For other tools, just use the tool name
-    PROMPT="use $TOOL_NAME tool"
+    # For non-Bash tools, exit early - they don't need permission
+    echo "Non-Bash tool ($TOOL_NAME), skipping notification" >> /tmp/pretooluse_hook.log
+    exit 0
   fi
 fi
 
