@@ -2,6 +2,13 @@
 
 set -euo pipefail
 
+# Log all output to debug file
+exec 2>/tmp/permission_hook_errors.log
+
+# Debug: Log that the hook was called
+echo "PreToolUse hook triggered!" > /tmp/pretooluse_hook.log
+date >> /tmp/pretooluse_hook.log
+
 # "WARNING: This script is executed as a Claude hook and will run code on your machine."
 # "Please inspect all hook scripts (.claude/hans/play.sh and others) before use."
 # "Running untrusted code can be dangerous and may compromise your system."
@@ -46,19 +53,32 @@ fi
 TRANSCRIPT_PATH=$(echo "$HOOK_DATA" | jq -r '.transcript_path')
 
 
-# Extract the actual user prompt from the JSONL transcript
+# For PreToolUse hook, extract the tool name and parameters
+TOOL_NAME=$(echo "$HOOK_DATA" | jq -r '.tool_name // empty')
+TOOL_PARAMS=$(echo "$HOOK_DATA" | jq -r '.tool_input // empty')
+
+# Debug: log the full hook data
+echo "$HOOK_DATA" > /tmp/hook_data_debug.json
+echo "Tool: $TOOL_NAME" >> /tmp/pretooluse_hook.log
+
+# Create a description of what tool is being used
 PROMPT=""
-if [[ -f "$TRANSCRIPT_PATH" ]]; then
-  # Use jq to process the entire file and get the last user message (excluding hook outputs)
-  LAST_USER_MSG=$(cat "$TRANSCRIPT_PATH" | jq -s 'map(select(.type == "user" and .message.role == "user" and ((.message.content | type) == "string") and (.message.content | contains("<user-prompt-submit-hook>") | not))) | last | .message.content // empty' -r 2>/dev/null)
-  if [[ -n "$LAST_USER_MSG" ]]; then
-    PROMPT="$LAST_USER_MSG"
+if [[ -n "$TOOL_NAME" ]]; then
+  # For Bash commands, extract the actual command
+  if [[ "$TOOL_NAME" == "Bash" ]]; then
+    COMMAND=$(echo "$TOOL_PARAMS" | jq -r '.command // empty')
+    if [[ -n "$COMMAND" ]]; then
+      PROMPT="run command: $COMMAND"
+    fi
+  else
+    # For other tools, just use the tool name
+    PROMPT="use $TOOL_NAME tool"
   fi
 fi
 
-# Fallback to prompt from hook data if transcript parsing fails
+# Fallback to general permission request if we can't determine the tool
 if [[ -z "$PROMPT" ]]; then
-  PROMPT=$(echo "$HOOK_DATA" | jq -r '.prompt // empty')
+  PROMPT="perform an action"
 fi
 
 # Check if required commands are available
@@ -83,7 +103,7 @@ if [[ -n "$OPENAI_KEY" && -n "$PROMPT" ]]; then
       messages: [
         {
           role: "system",
-          content: "Summarize what the user is asking about in 2-4 words. Be accurate and specific to their actual question."
+          content: "Summarize this tool action or command in 2-4 words. Be concise and specific. Examples: run tests, install package, read file, edit code."
         },
         {
           role: "user",
@@ -119,7 +139,7 @@ if [[ -n "$ELEVENLABS_API_KEY" && -n "$ELEVENLABS_VOICE_ID" ]]; then
   TMP_MP3="$(mktemp -t play.XXXXXX).mp3"
   
   # Prepare JSON using jq to safely handle arbitrary message text
-  JSON_BODY=$(jq -n --arg text "$SIMPLE_MESSAGE completed" '{
+  JSON_BODY=$(jq -n --arg text "Do I have permission to $SIMPLE_MESSAGE?" '{
     text: $text,
     model_id: "eleven_multilingual_v2",
     voice_settings: {
