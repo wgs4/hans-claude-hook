@@ -68,6 +68,47 @@ if [[ -n "$TOOL_NAME" ]]; then
   if [[ "$TOOL_NAME" == "Bash" ]]; then
     COMMAND=$(echo "$TOOL_PARAMS" | jq -r '.command // empty')
     if [[ -n "$COMMAND" ]]; then
+      # Check if this command is in the allowed list
+      # Read the settings file to get allowed commands
+      SETTINGS_FILE="/Users/david/code/.claude/settings.local.json"
+      if [[ -f "$SETTINGS_FILE" ]]; then
+        # Extract the first word/command from the full command
+        FIRST_WORD=$(echo "$COMMAND" | awk '{print $1}')
+        
+        # Check if this command matches any allowed pattern
+        IS_ALLOWED=$(cat "$SETTINGS_FILE" | jq -r '.permissions.allow[]' | while read -r pattern; do
+          # Check if pattern starts with "Bash("
+          if [[ "$pattern" == Bash\(* ]]; then
+            # Extract the command pattern from "Bash(command:*)" or "Bash(command command:*)"
+            ALLOWED_PATTERN=$(echo "$pattern" | sed 's/Bash(//' | sed 's/)$//')
+            
+            # Check if pattern ends with :* (wildcard)
+            if [[ "$ALLOWED_PATTERN" == *":*" ]]; then
+              # Remove the :* to get the base command
+              ALLOWED_CMD=$(echo "$ALLOWED_PATTERN" | sed 's/:.*$//')
+              
+              # Check if our command starts with this allowed command
+              if [[ "$COMMAND" == "$ALLOWED_CMD"* ]]; then
+                echo "yes"
+                break
+              fi
+            else
+              # Exact match required (no wildcard)
+              if [[ "$COMMAND" == "$ALLOWED_PATTERN" ]]; then
+                echo "yes"
+                break
+              fi
+            fi
+          fi
+        done)
+        
+        # If command is allowed, exit early without speaking
+        if [[ "$IS_ALLOWED" == "yes" ]]; then
+          echo "Command is allowed, skipping notification" >> /tmp/pretooluse_hook.log
+          exit 0
+        fi
+      fi
+      
       PROMPT="run command: $COMMAND"
     fi
   else
