@@ -61,60 +61,70 @@ TOOL_PARAMS=$(echo "$HOOK_DATA" | jq -r '.tool_input // empty')
 echo "$HOOK_DATA" > /tmp/hook_data_debug.json
 echo "Tool: $TOOL_NAME" >> /tmp/pretooluse_hook.log
 
-# Create a description of what tool is being used
-PROMPT=""
-if [[ -n "$TOOL_NAME" ]]; then
-  # For Bash commands, extract the actual command
+# Check if this tool is in the allowed list
+SETTINGS_FILE="/Users/david/code/.claude/settings.local.json"
+IS_ALLOWED="no"
+
+if [[ -f "$SETTINGS_FILE" ]] && [[ -n "$TOOL_NAME" ]]; then
+  # Check if this tool/command is in the allowed list
   if [[ "$TOOL_NAME" == "Bash" ]]; then
+    # For Bash commands, extract the actual command
     COMMAND=$(echo "$TOOL_PARAMS" | jq -r '.command // empty')
     if [[ -n "$COMMAND" ]]; then
-      # Check if this command is in the allowed list
-      # Read the settings file to get allowed commands
-      SETTINGS_FILE="/Users/david/code/.claude/settings.local.json"
-      if [[ -f "$SETTINGS_FILE" ]]; then
-        # Extract the first word/command from the full command
-        FIRST_WORD=$(echo "$COMMAND" | awk '{print $1}')
-        
-        # Check if this command matches any allowed pattern
-        IS_ALLOWED=$(cat "$SETTINGS_FILE" | jq -r '.permissions.allow[]' | while read -r pattern; do
-          # Check if pattern starts with "Bash("
-          if [[ "$pattern" == Bash\(* ]]; then
-            # Extract the command pattern from "Bash(command:*)" or "Bash(command command:*)"
-            ALLOWED_PATTERN=$(echo "$pattern" | sed 's/Bash(//' | sed 's/)$//')
+      # Check if this command matches any allowed Bash pattern
+      IS_ALLOWED=$(cat "$SETTINGS_FILE" | jq -r '.permissions.allow[]' | while read -r pattern; do
+        if [[ "$pattern" == "Bash("* ]]; then
+          # Extract the command pattern from "Bash(command:*)"
+          ALLOWED_PATTERN=$(echo "$pattern" | sed 's/Bash(//' | sed 's/)$//')
+          
+          # Check if pattern ends with :* (wildcard)
+          if [[ "$ALLOWED_PATTERN" == *":*" ]]; then
+            # Remove the :* to get the base command
+            ALLOWED_CMD=$(echo "$ALLOWED_PATTERN" | sed 's/:.*$//')
             
-            # Check if pattern ends with :* (wildcard)
-            if [[ "$ALLOWED_PATTERN" == *":*" ]]; then
-              # Remove the :* to get the base command
-              ALLOWED_CMD=$(echo "$ALLOWED_PATTERN" | sed 's/:.*$//')
-              
-              # Check if our command starts with this allowed command
-              if [[ "$COMMAND" == "$ALLOWED_CMD"* ]]; then
-                echo "yes"
-                break
-              fi
-            else
-              # Exact match required (no wildcard)
-              if [[ "$COMMAND" == "$ALLOWED_PATTERN" ]]; then
-                echo "yes"
-                break
-              fi
+            # Check if our command starts with this allowed command
+            if [[ "$COMMAND" == "$ALLOWED_CMD"* ]]; then
+              echo "yes"
+              break
+            fi
+          else
+            # Exact match required (no wildcard)
+            if [[ "$COMMAND" == "$ALLOWED_PATTERN" ]]; then
+              echo "yes"
+              break
             fi
           fi
-        done)
-        
-        # If command is allowed, exit early without speaking
-        if [[ "$IS_ALLOWED" == "yes" ]]; then
-          echo "Command is allowed, skipping notification" >> /tmp/pretooluse_hook.log
-          exit 0
         fi
-      fi
+      done)
       
       PROMPT="run command: $COMMAND"
     fi
   else
-    # For non-Bash tools, exit early - they don't need permission
-    echo "Non-Bash tool ($TOOL_NAME), skipping notification" >> /tmp/pretooluse_hook.log
-    exit 0
+    # For non-Bash tools, check if the tool itself is in the allowed list
+    IS_ALLOWED=$(cat "$SETTINGS_FILE" | jq -r '.permissions.allow[]' | while read -r pattern; do
+      # Check for exact tool match (like "Read", "Write", "Edit", etc.)
+      if [[ "$pattern" == "$TOOL_NAME" ]]; then
+        echo "yes"
+        break
+      fi
+    done)
+    
+    PROMPT="use $TOOL_NAME tool"
+  fi
+fi
+
+# If tool/command is allowed, exit early without speaking
+if [[ "$IS_ALLOWED" == "yes" ]]; then
+  echo "Tool/command is allowed, skipping notification" >> /tmp/pretooluse_hook.log
+  exit 0
+fi
+
+# Create a description of what tool is being used
+if [[ -z "$PROMPT" ]]; then
+  if [[ -n "$TOOL_NAME" ]]; then
+    PROMPT="use $TOOL_NAME tool"
+  else
+    PROMPT="perform an action"
   fi
 fi
 
