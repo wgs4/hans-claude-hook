@@ -62,7 +62,17 @@ echo "$HOOK_DATA" > /tmp/hook_data_debug.json
 echo "Tool: $TOOL_NAME" >> /tmp/pretooluse_hook.log
 
 # Check if this tool is in the allowed list
-SETTINGS_FILE="/Users/david/code/.claude/settings.local.json"
+# Priority order: project-specific settings, then global settings
+SETTINGS_FILE=""
+
+# First check for project-specific settings in current directory
+if [[ -f ".claude/settings.local.json" ]]; then
+  SETTINGS_FILE=".claude/settings.local.json"
+# Then check for global settings
+elif [[ -f "$HOME/.claude/settings.local.json" ]]; then
+  SETTINGS_FILE="$HOME/.claude/settings.local.json"
+fi
+
 IS_ALLOWED="no"
 
 if [[ -f "$SETTINGS_FILE" ]] && [[ -n "$TOOL_NAME" ]]; then
